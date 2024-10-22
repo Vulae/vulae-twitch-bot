@@ -213,7 +213,7 @@ impl Command<RadioArgs> for Radio {
         Ok(())
     }
 
-    fn update(&mut self) -> Result<()> {
+    fn update(&mut self, _api: &mut TwitchEventSubApi) -> Result<()> {
         if self.sink.empty() {
             self.queue.pop_front();
             self.load_random_next_song()?;

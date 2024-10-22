@@ -4,7 +4,7 @@ pub mod commands;
 use std::time::Duration;
 
 use anyhow::Result;
-use command::{Command, CommandArgsResult};
+use commands::CommandRegistry;
 use twitcheventsub::{ResponseType, Subscription, TwitchEventSubApi, TwitchKeys};
 
 fn main() -> Result<()> {
@@ -20,7 +20,7 @@ fn main() -> Result<()> {
         .build()
         .unwrap();
 
-    let mut radio = commands::Radio::initialize()?;
+    let mut commands = CommandRegistry::initialize()?;
 
     loop {
         while let Some(response) = api.receive_single_message(Duration::ZERO) {
@@ -29,17 +29,13 @@ fn main() -> Result<()> {
             };
             match event {
                 twitcheventsub::Event::ChatMessage(chat_message) => {
-                    if let CommandArgsResult::Execute(args) = radio.parse_args(&chat_message) {
-                        if let Err(err) = radio.execute(args, &chat_message, &mut api) {
-                            println!("ERR: {:#?}", err);
-                        }
-                    }
+                    commands.try_execute(&chat_message, &mut api)?;
                 }
                 _ => println!("Unimplemented event handling: {:#?}", event),
             }
         }
 
-        radio.update()?;
+        commands.update(&mut api)?;
 
         std::thread::sleep(Duration::from_millis(1));
     }

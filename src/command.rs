@@ -18,7 +18,8 @@ pub trait Command<Args> {
         chat_message: &MessageData,
         api: &mut TwitchEventSubApi,
     ) -> Result<()>;
-    fn update(&mut self) -> Result<()> {
+    #[allow(unused)]
+    fn update(&mut self, api: &mut TwitchEventSubApi) -> Result<()> {
         Ok(())
     }
 }
