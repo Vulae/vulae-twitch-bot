@@ -1,0 +1,12 @@
+[package]
+name = "vulae-twitch-bot"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.90"
+rand = "0.8.5"
+rodio = "0.19.0"
+serde_json = "1.0.132"
+twitcheventsub = "0.1.4"
+url = "2.5.2"
