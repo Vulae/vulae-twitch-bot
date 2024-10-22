@@ -30,7 +30,9 @@ fn main() -> Result<()> {
             match event {
                 twitcheventsub::Event::ChatMessage(chat_message) => {
                     if let CommandArgsResult::Execute(args) = radio.parse_args(&chat_message) {
-                        radio.execute(args, &chat_message, &mut api)?;
+                        if let Err(err) = radio.execute(args, &chat_message, &mut api) {
+                            println!("ERR: {:#?}", err);
+                        }
                     }
                 }
                 _ => println!("Unimplemented event handling: {:#?}", event),
