@@ -140,15 +140,17 @@ impl Command<RadioArgs> for Radio {
             }
             Some("!songrequest") | Some("!sr") => {
                 let Some(url_str) = split.next() else {
-                    return CommandArgsResult::BadArguments;
+                    return CommandArgsResult::BadArguments("Must include URL".to_owned());
                 };
                 let Ok(url) = Url::parse(url_str) else {
-                    return CommandArgsResult::BadArguments;
+                    return CommandArgsResult::BadArguments("Invalid URL".to_owned());
                 };
                 match url.domain() {
                     Some("www.youtube.com") => {
                         let Some((_, id)) = url.query_pairs().find(|(key, _)| key == "v") else {
-                            return CommandArgsResult::BadArguments;
+                            return CommandArgsResult::BadArguments(
+                                "Could not extract YouTube video ID from URL".to_owned(),
+                            );
                         };
                         CommandArgsResult::Execute(RadioArgs::SongRequest(
                             RadioPlatformSong::YouTube { id: id.to_string() },
@@ -157,13 +159,15 @@ impl Command<RadioArgs> for Radio {
                     Some("youtu.be") => {
                         let Some(id) = url.path_segments().and_then(|mut segments| segments.next())
                         else {
-                            return CommandArgsResult::BadArguments;
+                            return CommandArgsResult::BadArguments(
+                                "Could not extract YouTube video ID from URL".to_owned(),
+                            );
                         };
                         CommandArgsResult::Execute(RadioArgs::SongRequest(
                             RadioPlatformSong::YouTube { id: id.to_owned() },
                         ))
                     }
-                    _ => CommandArgsResult::BadArguments,
+                    _ => CommandArgsResult::BadArguments("Unsupported platform".to_owned()),
                 }
             }
             _ => CommandArgsResult::WrongCommand,

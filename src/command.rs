@@ -5,7 +5,7 @@ use twitcheventsub::{MessageData, TwitchEventSubApi};
 pub enum CommandArgsResult<Args> {
     WrongCommand,
     UnsufficientPermissions,
-    BadArguments,
+    BadArguments(String),
     Execute(Args),
 }
 

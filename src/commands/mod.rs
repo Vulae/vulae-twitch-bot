@@ -36,10 +36,17 @@ impl CommandRegistry {
         chat_message: &MessageData,
         api: &mut TwitchEventSubApi,
     ) -> Result<()> {
-        if let CommandArgsResult::Execute(args) = self.radio.parse_args(chat_message) {
-            if let Err(err) = self.radio.execute(args, chat_message, api) {
-                println!("ERR: {:#?}", err);
+        match self.radio.parse_args(chat_message) {
+            CommandArgsResult::BadArguments(message) => {
+                let _ = api
+                    .send_chat_message_with_reply(message, Some(chat_message.message_id.clone()));
             }
+            CommandArgsResult::Execute(args) => {
+                if let Err(err) = self.radio.execute(args, chat_message, api) {
+                    println!("ERR: {:#?}", err);
+                }
+            }
+            _ => {}
         }
 
         self.simple_reply_commands
