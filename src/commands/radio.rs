@@ -1,5 +1,4 @@
-// TODO: Media controms metadata
-// TODO: Better playlist randomization (Don't play previous song(s))
+// TODO: Media controls metadata
 // TODO: Bigger playlist
 // TODO: Make song downloads non-blocking
 
@@ -21,6 +20,7 @@ use crate::command::{Command, CommandArgsResult};
 
 static PLAYLIST: &str = "https://www.youtube.com/playlist?list=PLBXgEHtQmuZmH4Nqcnz1ZVdgcqzrCewl_";
 static PLAYLIST_PATH: &str = "/home/vulae/Music/vulae-twitch-bot/playlist";
+static PLAYLIST_BLACKLIST_PREVIOUS_SONGS_LEN: usize = 5;
 static REQUESTED_PATH: &str = "/home/vulae/Music/vulae-twitch-bot/requests";
 static AUDIO_FORMAT: &str = "vorbis";
 static AUDIO_FORMAT_EXT: &str = "ogg";
@@ -32,6 +32,7 @@ pub struct Radio {
     #[allow(unused)]
     stream_handle: rodio::OutputStreamHandle,
     sink: rodio::Sink,
+    played: Vec<RadioPlatformSong>,
     queue: VecDeque<RadioPlatformSong>,
     controls: souvlaki::MediaControls,
     rx: Receiver<souvlaki::MediaControlEvent>,
@@ -70,6 +71,7 @@ impl Radio {
             stream,
             stream_handle,
             sink,
+            played: Vec::new(),
             queue: VecDeque::new(),
             controls,
             rx,
@@ -81,34 +83,61 @@ impl Radio {
         let source = rodio::Decoder::new(File::open(song_path)?)?;
         self.sink.append(source);
         self.sink.play();
-        self.queue.push_back(
+        let platform_song =
             RadioPlatformSong::from_filename(song_path.file_name().unwrap().to_str().unwrap())
-                .unwrap(),
-        );
+                .unwrap();
+        self.played.push(platform_song.clone());
+        if self.played.len() > PLAYLIST_BLACKLIST_PREVIOUS_SONGS_LEN {
+            // Sorry
+            self.played.remove(0);
+        }
+        self.queue.push_back(platform_song);
         Ok(())
     }
 
     fn load_random_next_song(&mut self) -> Result<()> {
-        let song_paths = std::fs::read_dir(PLAYLIST_PATH)?
+        // All playlist songs
+        let mut song_paths = std::fs::read_dir(PLAYLIST_PATH)?
             .filter_map(|entry| {
                 let Ok(entry) = entry else {
                     return None;
                 };
                 let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()) == Some("ogg") {
+                if path.extension().and_then(|e| e.to_str()) == Some(AUDIO_FORMAT_EXT) {
                     Some(path)
                 } else {
                     None
                 }
             })
             .collect::<Vec<_>>();
+
+        // Filter out just played songs
+        self.played[self
+            .played
+            .len()
+            .saturating_sub(PLAYLIST_BLACKLIST_PREVIOUS_SONGS_LEN)..]
+            .iter()
+            .for_each(|previous| {
+                song_paths.retain(|song_path| {
+                    let Some(platform_song) = RadioPlatformSong::from_filename(
+                        song_path.file_name().unwrap().to_str().unwrap(),
+                    ) else {
+                        println!("This should never happen.");
+                        return false;
+                    };
+                    *previous != platform_song
+                });
+            });
+
+        // Random song
         let song_path = song_paths.choose(&mut rand::thread_rng()).unwrap();
+
         self.load_next_song(song_path)?;
         Ok(())
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 /// Use new_* for sanitized constructor
 pub enum RadioPlatformSong {
     YouTube { id: String },
