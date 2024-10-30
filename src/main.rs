@@ -4,42 +4,74 @@
 
 pub mod command;
 pub mod commands;
+pub mod twitch_event_handler;
 
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Error, Result};
 use commands::CommandRegistry;
-use twitcheventsub::{ResponseType, Subscription, TwitchEventSubApi, TwitchKeys};
+use twitch_event_handler::TwitchEventHandler;
+use twitcheventsub::{ResponseType, TwitchEventSubApi, TwitchKeys};
+
+struct TestHandler;
+impl TwitchEventHandler for TestHandler {
+    fn subscribed_events(&self) -> &[twitcheventsub::Subscription] {
+        &[twitcheventsub::Subscription::ChatMessage]
+    }
+
+    fn handle_event(
+        &mut self,
+        event: &twitcheventsub::Event,
+        api: &mut twitcheventsub::TwitchEventSubApi,
+    ) -> Result<()> {
+        if let twitcheventsub::Event::ChatMessage(message) = event {
+            // TODO: Make issue on twitcheventsub for this functionality
+            //if message.chatter.id == api.client_id() {
+            //    return Ok(());
+            //}
+            if message.reply.is_some() {
+                return Ok(());
+            }
+            if message.message.text.to_lowercase().contains("uwu") {
+                let _ = api.send_chat_message_with_reply("UwU", Some(message.message_id.clone()));
+            }
+        };
+        Ok(())
+    }
+}
 
 fn main() -> Result<()> {
     let keys = TwitchKeys::from_secrets_env().unwrap();
 
-    let mut api = TwitchEventSubApi::builder(keys)
+    let mut handler_commands = CommandRegistry::initialize()?;
+    let mut handlers: Vec<Box<dyn TwitchEventHandler>> = vec![Box::new(TestHandler)];
+
+    let api_builder = TwitchEventSubApi::builder(keys)
         .set_redirect_url("http://localhost:3000")
         .generate_new_token_if_insufficent_scope(true)
         .generate_new_token_if_none(true)
         .generate_access_token_on_expire(true)
-        .auto_save_load_created_tokens(".user_token.env", ".refresh_token.env")
-        .add_subscription(Subscription::ChatMessage)
-        .build()
-        .unwrap();
+        .auto_save_load_created_tokens(".user_token.env", ".refresh_token.env");
 
-    let mut commands = CommandRegistry::initialize()?;
+    // WARNING: twitcheventsub uses a Vec instead of HashMap to keep track of what events are
+    // subscribed to. I have no clue if this will break stuff (hopefully not.)
+    let api_builder = api_builder.add_subscriptions(handler_commands.subscribed_events().to_vec());
+
+    let mut api = api_builder.build().unwrap();
 
     loop {
         while let Some(response) = api.receive_single_message(Duration::ZERO) {
             let ResponseType::Event(event) = response else {
                 continue;
             };
-            match event {
-                twitcheventsub::Event::ChatMessage(chat_message) => {
-                    commands.try_execute(&chat_message, &mut api)?;
-                }
-                _ => println!("Unimplemented event handling: {:#?}", event),
-            }
+            handler_commands.handle_event(&event, &mut api)?;
+            handlers.iter_mut().try_for_each(|handler| {
+                handler.handle_event(&event, &mut api)?;
+                Ok::<(), Error>(())
+            })?;
         }
 
-        commands.update(&mut api)?;
+        handler_commands.update(&mut api)?;
 
         std::thread::sleep(Duration::from_millis(1));
     }

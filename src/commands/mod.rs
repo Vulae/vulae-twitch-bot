@@ -8,11 +8,12 @@ use twitcheventsub::{MessageData, TwitchEventSubApi};
 use crate::{
     command::{Command, CommandArgsResult},
     create_simple_reply_command,
+    twitch_event_handler::TwitchEventHandler,
 };
 
 create_simple_reply_command!(CommandBot; "bot"; "https://github.com/Vulae/vulae-twitch-bot");
 create_simple_reply_command!(CommandGitHub; "github", "gh"; "https://github.com/Vulae");
-create_simple_reply_command!(CommandUwU; "uwu"; "OwO");
+//create_simple_reply_command!(CommandUwU; "uwu"; "OwO");
 
 pub struct CommandRegistry {
     radio: radio::Radio,
@@ -26,7 +27,7 @@ impl CommandRegistry {
             simple_reply_commands: vec![
                 Box::new(CommandBot),
                 Box::new(CommandGitHub),
-                Box::new(CommandUwU),
+                //Box::new(CommandUwU),
             ],
         })
     }
@@ -65,5 +66,22 @@ impl CommandRegistry {
         self.radio.update(api)?;
 
         Ok(())
+    }
+}
+
+impl TwitchEventHandler for CommandRegistry {
+    fn subscribed_events(&self) -> &[twitcheventsub::Subscription] {
+        &[twitcheventsub::Subscription::ChatMessage]
+    }
+
+    fn handle_event(
+        &mut self,
+        event: &twitcheventsub::Event,
+        api: &mut twitcheventsub::TwitchEventSubApi,
+    ) -> Result<()> {
+        match event {
+            twitcheventsub::Event::ChatMessage(message) => self.try_execute(message, api),
+            _ => Ok(()),
+        }
     }
 }
