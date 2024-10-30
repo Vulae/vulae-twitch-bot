@@ -1,3 +1,7 @@
+// TODO: Refactor how events are handled.
+// Have a event handler trait that initializes with a list of events to subscribe to
+// then sending it events that it's subscribed to.
+
 pub mod command;
 pub mod commands;
 

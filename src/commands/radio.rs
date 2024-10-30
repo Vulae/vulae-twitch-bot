@@ -1,6 +1,11 @@
+// TODO: Media controls
+// TODO: Better playlist randomization (Don't play previous song(s))
+// TODO: Bigger playlist
+// TODO: Make song downloads non-blocking
+
 use std::{collections::VecDeque, fs::File, path::PathBuf, process, str::FromStr};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use rand::prelude::SliceRandom;
 use twitcheventsub::{MessageData, TwitchEventSubApi};
 use url::Url;
@@ -81,11 +86,22 @@ impl Radio {
 }
 
 #[derive(Debug)]
+/// Use new_* for sanitized constructor
 pub enum RadioPlatformSong {
     YouTube { id: String },
 }
 
 impl RadioPlatformSong {
+    fn new_youtube(id: &str) -> Result<Self> {
+        const ALLOWED_CHARS: &str =
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+        if id.chars().all(|c| ALLOWED_CHARS.contains(c)) {
+            Ok(RadioPlatformSong::YouTube { id: id.to_owned() })
+        } else {
+            Err(anyhow!("Invalid YouTube ID"))
+        }
+    }
+
     fn from_filename(filename: &str) -> Option<RadioPlatformSong> {
         match filename.split("-").next() {
             Some("youtube") => Some(RadioPlatformSong::YouTube {
@@ -152,9 +168,11 @@ impl Command<RadioArgs> for Radio {
                                 "Could not extract YouTube video ID from URL".to_owned(),
                             );
                         };
-                        CommandArgsResult::Execute(RadioArgs::SongRequest(
-                            RadioPlatformSong::YouTube { id: id.to_string() },
-                        ))
+                        if let Ok(song) = RadioPlatformSong::new_youtube(&id) {
+                            CommandArgsResult::Execute(RadioArgs::SongRequest(song))
+                        } else {
+                            CommandArgsResult::BadArguments("Invalid YouTube ID".to_owned())
+                        }
                     }
                     Some("youtu.be") => {
                         let Some(id) = url.path_segments().and_then(|mut segments| segments.next())
@@ -163,9 +181,11 @@ impl Command<RadioArgs> for Radio {
                                 "Could not extract YouTube video ID from URL".to_owned(),
                             );
                         };
-                        CommandArgsResult::Execute(RadioArgs::SongRequest(
-                            RadioPlatformSong::YouTube { id: id.to_owned() },
-                        ))
+                        if let Ok(song) = RadioPlatformSong::new_youtube(id) {
+                            CommandArgsResult::Execute(RadioArgs::SongRequest(song))
+                        } else {
+                            CommandArgsResult::BadArguments("Invalid YouTube ID".to_owned())
+                        }
                     }
                     _ => CommandArgsResult::BadArguments("Unsupported platform".to_owned()),
                 }
@@ -190,6 +210,13 @@ impl Command<RadioArgs> for Radio {
                 }
             }
             RadioArgs::SongRequest(platform_song) => {
+                println!(
+                    "{} ({}) requested: {}",
+                    chat_message.chatter.name,
+                    chat_message.chatter.id,
+                    platform_song.to_url()
+                );
+
                 platform_song
                     .apply_yt_dlp(
                         process::Command::new("yt-dlp")
