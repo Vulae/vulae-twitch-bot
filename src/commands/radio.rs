@@ -1,9 +1,16 @@
-// TODO: Media controls
+// TODO: Media controms metadata
 // TODO: Better playlist randomization (Don't play previous song(s))
 // TODO: Bigger playlist
 // TODO: Make song downloads non-blocking
 
-use std::{collections::VecDeque, fs::File, path::PathBuf, process, str::FromStr};
+use std::{
+    collections::VecDeque,
+    fs::File,
+    path::PathBuf,
+    process,
+    str::FromStr,
+    sync::mpsc::{self, Receiver},
+};
 
 use anyhow::{anyhow, Result};
 use rand::prelude::SliceRandom;
@@ -18,6 +25,7 @@ static REQUESTED_PATH: &str = "/home/vulae/Music/vulae-twitch-bot/requests";
 static AUDIO_FORMAT: &str = "vorbis";
 static AUDIO_FORMAT_EXT: &str = "ogg";
 
+#[allow(dead_code)]
 pub struct Radio {
     #[allow(unused)]
     stream: rodio::OutputStream,
@@ -25,6 +33,8 @@ pub struct Radio {
     stream_handle: rodio::OutputStreamHandle,
     sink: rodio::Sink,
     queue: VecDeque<RadioPlatformSong>,
+    controls: souvlaki::MediaControls,
+    rx: Receiver<souvlaki::MediaControlEvent>,
 }
 
 impl Radio {
@@ -45,11 +55,24 @@ impl Radio {
         let (stream, stream_handle) = rodio::OutputStream::try_default()?;
         let sink = rodio::Sink::try_new(&stream_handle)?;
         sink.set_volume(0.25);
+        let mut controls = souvlaki::MediaControls::new(souvlaki::PlatformConfig {
+            display_name: "vulae-twitch-bot",
+            dbus_name: "vulae-twitch-bot",
+            hwnd: None,
+        })?;
+        let (tx, rx) = mpsc::channel();
+        controls.attach(move |event| {
+            tx.send(event).unwrap();
+        })?;
+        // Needs to have set metadata for events to start being recieved.
+        controls.set_metadata(Default::default())?;
         Ok(Self {
             stream,
             stream_handle,
             sink,
             queue: VecDeque::new(),
+            controls,
+            rx,
         })
     }
 
@@ -245,6 +268,27 @@ impl Command<RadioArgs> for Radio {
     }
 
     fn update(&mut self, _api: &mut TwitchEventSubApi) -> Result<()> {
+        match self.rx.try_recv() {
+            Ok(event) => match event {
+                souvlaki::MediaControlEvent::Toggle => {
+                    if self.sink.is_paused() {
+                        self.sink.play();
+                    } else {
+                        self.sink.pause();
+                    }
+                }
+                souvlaki::MediaControlEvent::Next => {
+                    self.sink.skip_one();
+                }
+                souvlaki::MediaControlEvent::Previous => {
+                    println!("Media control previous not implemented.")
+                }
+                event => println!("Unimplemented event {:#?}", event),
+            },
+            Err(mpsc::TryRecvError::Empty) => {}
+            Err(err) => return Err(err.into()),
+        }
+
         if self.sink.empty() {
             self.queue.pop_front();
             self.load_random_next_song()?;
