@@ -9,6 +9,8 @@ use commands::CommandRegistry;
 use twitch_event_handler::TwitchEventHandler;
 use twitcheventsub::{ResponseType, TwitchEventSubApi, TwitchKeys};
 
+const API_BOT_USER_ID: &str = "1131985206";
+
 struct TestHandler;
 impl TwitchEventHandler for TestHandler {
     fn subscribed_events(&self) -> &[twitcheventsub::Subscription] {
@@ -25,7 +27,7 @@ impl TwitchEventHandler for TestHandler {
             //if message.chatter.id == api.client_id() {
             //    return Ok(());
             //}
-            if message.reply.is_some() {
+            if message.chatter.id == API_BOT_USER_ID {
                 return Ok(());
             }
             if message.message.text.to_lowercase().contains("uwu") {
@@ -52,8 +54,12 @@ fn main() -> Result<()> {
     // WARNING: twitcheventsub uses a Vec instead of HashMap to keep track of what events are
     // subscribed to. I have no clue if this will break stuff (hopefully not.)
     let api_builder = api_builder.add_subscriptions(handler_commands.subscribed_events().to_vec());
+    let api_builder = handlers.iter().fold(api_builder, |api_builder, handler| {
+        api_builder.add_subscriptions(handler.subscribed_events().to_vec())
+    });
 
     let mut api = api_builder.build().unwrap();
+    println!("Bot started!");
 
     loop {
         while let Some(response) = api.receive_single_message(Duration::ZERO) {
