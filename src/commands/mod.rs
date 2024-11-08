@@ -1,3 +1,4 @@
+pub mod neovim;
 mod radio;
 mod simple_reply;
 
@@ -18,6 +19,7 @@ create_simple_reply_command!(CommandCommands; "commands", "cmds", "help"; "https
 
 pub struct CommandRegistry {
     radio: radio::Radio,
+    neovim: neovim::Neovim,
     simple_reply_commands: Vec<Box<dyn SimpleReplyCommand>>,
 }
 
@@ -25,6 +27,7 @@ impl CommandRegistry {
     pub fn initialize() -> Result<Self> {
         Ok(Self {
             radio: radio::Radio::initialize()?,
+            neovim: neovim::Neovim::initialize()?,
             simple_reply_commands: vec![
                 Box::new(CommandBot),
                 Box::new(CommandGitHub),
@@ -51,6 +54,18 @@ impl CommandRegistry {
             }
             _ => {}
         }
+        match self.neovim.parse_args(chat_message) {
+            CommandArgsResult::BadArguments(message) => {
+                let _ = api
+                    .send_chat_message_with_reply(message, Some(chat_message.message_id.clone()));
+            }
+            CommandArgsResult::Execute(args) => {
+                if let Err(err) = self.neovim.execute(args, chat_message, api) {
+                    println!("ERR: {:#?}", err);
+                }
+            }
+            _ => {}
+        }
 
         self.simple_reply_commands
             .iter_mut()
@@ -66,6 +81,7 @@ impl CommandRegistry {
 
     pub fn update(&mut self, api: &mut TwitchEventSubApi) -> Result<()> {
         self.radio.update(api)?;
+        self.neovim.update(api)?;
 
         Ok(())
     }

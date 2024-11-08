@@ -51,7 +51,7 @@ fn main() -> Result<()> {
         .generate_access_token_on_expire(true)
         .auto_save_load_created_tokens(".user_token.env", ".refresh_token.env");
 
-    // WARNING: twitcheventsub uses a Vec instead of HashMap to keep track of what events are
+    // WARNING: twitcheventsub uses a Vec instead of HashSet to keep track of what events are
     // subscribed to. I have no clue if this will break stuff (hopefully not.)
     let api_builder = api_builder.add_subscriptions(handler_commands.subscribed_events().to_vec());
     let api_builder = handlers.iter().fold(api_builder, |api_builder, handler| {
