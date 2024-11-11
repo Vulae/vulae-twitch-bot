@@ -12,9 +12,10 @@ use crate::{
     twitch_event_handler::TwitchEventHandler,
 };
 
-create_simple_reply_command!(CommandBot; "bot"; "https://github.com/Vulae/vulae-twitch-bot");
 create_simple_reply_command!(CommandGitHub; "github", "gh"; "https://github.com/Vulae");
+create_simple_reply_command!(CommandBot; "bot"; "https://github.com/Vulae/vulae-twitch-bot");
 create_simple_reply_command!(CommandCommands; "commands", "cmds", "help"; "https://github.com/Vulae/vulae-twitch-bot#commands");
+create_simple_reply_command!(CommandDotFiles; "dotfiles", "dotconfig", ".config"; "https://github.com/Vulae/dotfiles");
 //create_simple_reply_command!(CommandUwU; "uwu"; "OwO");
 
 pub struct CommandRegistry {
@@ -32,6 +33,7 @@ impl CommandRegistry {
                 Box::new(CommandBot),
                 Box::new(CommandGitHub),
                 Box::new(CommandCommands),
+                Box::new(CommandDotFiles),
                 //Box::new(CommandUwU),
             ],
         })
