@@ -1,0 +1,18 @@
+
+simple_reply_commands:
+  github:
+    names: [ "github", "gh" ]
+    responds: "https://github.com/Vulae"
+  bot:
+    names: [ "bot" ]
+    responds: "https://github.com/Vulae/vulae-twitch-bot"
+  commands:
+    names: [ "commands", "cmds", "help" ]
+    responds: "https://github.com/Vulae/vulae-twitch-bot#commands"
+  dotfiles:
+    names: [ "dotfiles", "dotconfig", ".config" ]
+    responds: "https://github.com/Vulae/dotfiles"
+  uwu:
+    names: [ "uwu", "owo" ]
+    responds: "UwU"
+

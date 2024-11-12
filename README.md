@@ -5,10 +5,10 @@ Twitch bot for [twitch.tv/vulae_](https://twitch.tv/vulae_)
 
 ## [Commands](#commands)
 
-* [`!github`](./src/commands/mod.rs#L15) - My GitHub
-* [`!bot`](./src/commands/mod.rs#L15) - Link to this page
-* [`!commands`](./src/commands/mod.rs#L15) - Link to this section of the page
-* [`!dotfiles`](./src/commands/mod.rs#L15) - My ~/.config/
+* [`!github`](./data.yaml) - My GitHub
+* [`!bot`](./data.yaml) - Link to this page
+* [`!commands`](./data.yaml) - Link to this section of the page
+* [`!dotfiles`](./data.yaml) - My ~/.config/
 * [Radio](./src/commands/radio.rs)
     * `!song` - Current song URL
     * `!sr [URL]` - Request a song (YouTube only)
@@ -19,8 +19,8 @@ Twitch bot for [twitch.tv/vulae_](https://twitch.tv/vulae_)
 ## [TODO](#todo)
 
 * `!wallpaper [URL]` - Set desktop wallpaper (Probably require review from me & only allow imgur, discord, & reddit links)
-* Config file for some stuff
 * Respond to certain messages (Hi, UwU, & some other stuff) either in chat or with sound alert.
+* Twitch chat display TUI
 
 ## [License](#license)
 

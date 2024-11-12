@@ -1,41 +1,28 @@
 pub mod neovim;
-mod radio;
-mod simple_reply;
+pub mod radio;
+pub mod simple_reply;
 
 use anyhow::{Error, Result};
-use simple_reply::SimpleReplyCommand;
 use twitcheventsub::{MessageData, TwitchEventSubApi};
 
 use crate::{
     command::{Command, CommandArgsResult},
-    create_simple_reply_command,
+    config::Config,
     twitch_event_handler::TwitchEventHandler,
 };
-
-create_simple_reply_command!(CommandGitHub; "github", "gh"; "https://github.com/Vulae");
-create_simple_reply_command!(CommandBot; "bot"; "https://github.com/Vulae/vulae-twitch-bot");
-create_simple_reply_command!(CommandCommands; "commands", "cmds", "help"; "https://github.com/Vulae/vulae-twitch-bot#commands");
-create_simple_reply_command!(CommandDotFiles; "dotfiles", "dotconfig", ".config"; "https://github.com/Vulae/dotfiles");
-//create_simple_reply_command!(CommandUwU; "uwu"; "OwO");
 
 pub struct CommandRegistry {
     radio: radio::Radio,
     neovim: neovim::Neovim,
-    simple_reply_commands: Vec<Box<dyn SimpleReplyCommand>>,
+    simple_reply_commands: simple_reply::SimpleReplyCommandHandler,
 }
 
 impl CommandRegistry {
-    pub fn initialize() -> Result<Self> {
+    pub fn initialize(config: &Config) -> Result<Self> {
         Ok(Self {
-            radio: radio::Radio::initialize()?,
+            radio: radio::Radio::initialize(config.radio.clone())?,
             neovim: neovim::Neovim::initialize()?,
-            simple_reply_commands: vec![
-                Box::new(CommandBot),
-                Box::new(CommandGitHub),
-                Box::new(CommandCommands),
-                Box::new(CommandDotFiles),
-                //Box::new(CommandUwU),
-            ],
+            simple_reply_commands: config.data().simple_reply_commands.clone(),
         })
     }
 
@@ -69,14 +56,13 @@ impl CommandRegistry {
             _ => {}
         }
 
-        self.simple_reply_commands
-            .iter_mut()
-            .try_for_each(|command| {
-                if let CommandArgsResult::Execute(args) = command.parse_args(chat_message) {
-                    command.execute(args, chat_message, api)?;
-                }
-                Ok::<(), Error>(())
-            })?;
+        if let CommandArgsResult::Execute(args) =
+            self.simple_reply_commands.parse_args(chat_message)
+        {
+            if let Err(err) = self.simple_reply_commands.execute(args, chat_message, api) {
+                println!("ERR: {:#?}", err);
+            }
+        }
 
         Ok(())
     }

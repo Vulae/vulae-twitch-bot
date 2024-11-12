@@ -1,56 +1,49 @@
-use anyhow::Result;
-use twitcheventsub::{MessageData, TwitchEventSubApi};
+use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+use twitcheventsub::MessageData;
 
 use crate::command::{Command, CommandArgsResult};
 
-pub trait SimpleReplyCommand {
-    fn names(&self) -> &[&str];
-    fn reply(&self) -> &str;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimpleReplyCommand {
+    names: Vec<String>,
+    responds: String,
 }
 
-impl Command<()> for dyn SimpleReplyCommand {
-    fn parse_args(&self, chat_message: &MessageData) -> CommandArgsResult<()> {
-        if self.names().iter().any(|name| {
-            chat_message
-                .message
-                .text
-                .to_lowercase()
-                .starts_with(&format!("!{}", name.to_lowercase()))
-        }) {
-            CommandArgsResult::Execute(())
-        } else {
-            CommandArgsResult::WrongCommand
-        }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SimpleReplyCommandHandler(HashMap<String, SimpleReplyCommand>);
+
+impl Command<String> for SimpleReplyCommandHandler {
+    fn parse_args(&self, chat_message: &MessageData) -> CommandArgsResult<String> {
+        self.0
+            .iter()
+            .find(|(_, command)| {
+                command.names.iter().any(|name| {
+                    chat_message
+                        .message
+                        .text
+                        .to_lowercase()
+                        .starts_with(&format!("!{}", name))
+                })
+            })
+            .map(|(key, _)| CommandArgsResult::Execute(key.clone()))
+            .unwrap_or(CommandArgsResult::WrongCommand)
     }
 
     fn execute(
         &mut self,
-        _args: (),
-        chat_message: &MessageData,
-        api: &mut TwitchEventSubApi,
-    ) -> Result<()> {
-        let _ =
-            api.send_chat_message_with_reply(self.reply(), Some(chat_message.message_id.clone()));
+        args: String,
+        chat_message: &twitcheventsub::MessageData,
+        api: &mut twitcheventsub::TwitchEventSubApi,
+    ) -> anyhow::Result<()> {
+        if let Some(command) = self.0.get(&args) {
+            let _ = api.send_chat_message_with_reply(
+                &command.responds,
+                Some(chat_message.message_id.clone()),
+            );
+        }
         Ok(())
     }
-}
-
-#[macro_export]
-macro_rules! create_simple_reply_command {
-    ($struct_name:ident; $($name:literal),+; $message:literal) => {
-        struct $struct_name;
-
-        impl $crate::commands::simple_reply::SimpleReplyCommand for $struct_name {
-            fn names(&self) -> &[&str] {
-                &[
-                    $(
-                        $name,
-                    )+
-                ]
-            }
-            fn reply(&self) -> &str {
-                $message
-            }
-        }
-    };
 }

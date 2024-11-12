@@ -1,48 +1,23 @@
 pub mod command;
 pub mod commands;
+pub mod config;
 pub mod twitch_event_handler;
 
 use std::time::Duration;
 
 use anyhow::{Error, Result};
 use commands::CommandRegistry;
+use config::Config;
 use twitch_event_handler::TwitchEventHandler;
 use twitcheventsub::{ResponseType, TwitchEventSubApi, TwitchKeys};
 
-const API_BOT_USER_ID: &str = "1131985206";
-
-struct TestHandler;
-impl TwitchEventHandler for TestHandler {
-    fn subscribed_events(&self) -> &[twitcheventsub::Subscription] {
-        &[twitcheventsub::Subscription::ChatMessage]
-    }
-
-    fn handle_event(
-        &mut self,
-        event: &twitcheventsub::Event,
-        api: &mut twitcheventsub::TwitchEventSubApi,
-    ) -> Result<()> {
-        if let twitcheventsub::Event::ChatMessage(message) = event {
-            // TODO: Make issue on twitcheventsub for this functionality
-            //if message.chatter.id == api.client_id() {
-            //    return Ok(());
-            //}
-            if message.chatter.id == API_BOT_USER_ID {
-                return Ok(());
-            }
-            if message.message.text.to_lowercase().contains("uwu") {
-                let _ = api.send_chat_message_with_reply("UwU", Some(message.message_id.clone()));
-            }
-        };
-        Ok(())
-    }
-}
-
 fn main() -> Result<()> {
+    let config = Config::load()?;
+
     let keys = TwitchKeys::from_secrets_env().unwrap();
 
-    let mut handler_commands = CommandRegistry::initialize()?;
-    let mut handlers: Vec<Box<dyn TwitchEventHandler>> = vec![Box::new(TestHandler)];
+    let mut handler_commands = CommandRegistry::initialize(&config)?;
+    let mut handlers: Vec<Box<dyn TwitchEventHandler>> = vec![];
 
     let api_builder = TwitchEventSubApi::builder(keys)
         .set_redirect_url("http://localhost:3000")

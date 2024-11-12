@@ -1,0 +1,7 @@
+bot-user-id = "1131985206"
+data-file = "data.yaml"
+
+[radio]
+playlist = "https://www.youtube.com/playlist?list=PLBXgEHtQmuZmH4Nqcnz1ZVdgcqzrCewl_"
+playlist-path = "/home/vulae/Music/vulae-twitch-bot/playlist"
+requested-path = "/home/vulae/Music/vulae-twitch-bot/requests"

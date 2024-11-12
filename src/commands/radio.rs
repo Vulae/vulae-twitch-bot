@@ -13,20 +13,48 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use rand::prelude::SliceRandom;
+use serde::{Deserialize, Serialize};
 use twitcheventsub::{MessageData, TwitchEventSubApi};
 use url::Url;
 
 use crate::command::{Command, CommandArgsResult};
 
-static PLAYLIST: &str = "https://www.youtube.com/playlist?list=PLBXgEHtQmuZmH4Nqcnz1ZVdgcqzrCewl_";
-static PLAYLIST_PATH: &str = "/home/vulae/Music/vulae-twitch-bot/playlist";
-static PLAYLIST_BLACKLIST_PREVIOUS_SONGS_LEN: usize = 5;
-static REQUESTED_PATH: &str = "/home/vulae/Music/vulae-twitch-bot/requests";
-static AUDIO_FORMAT: &str = "vorbis";
-static AUDIO_FORMAT_EXT: &str = "ogg";
+fn config_default_playlist_blacklist_previous_songs_len() -> usize {
+    5
+}
+
+fn config_default_audio_format() -> String {
+    "vorbis".to_owned()
+}
+
+fn config_default_audio_format_ext() -> String {
+    "ogg".to_owned()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RadioConfig {
+    playlist: String,
+    #[serde(rename = "playlist-path")]
+    playlist_path: PathBuf,
+    #[serde(
+        rename = "playlist-blacklist-previous-songs-len",
+        default = "config_default_playlist_blacklist_previous_songs_len"
+    )]
+    playlist_blacklist_previous_songs_len: usize,
+    #[serde(rename = "requested-path")]
+    requested_path: PathBuf,
+    #[serde(rename = "audio-format", default = "config_default_audio_format")]
+    audio_format: String,
+    #[serde(
+        rename = "audio-format-ext",
+        default = "config_default_audio_format_ext"
+    )]
+    audio_format_ext: String,
+}
 
 #[allow(dead_code)]
 pub struct Radio {
+    config: RadioConfig,
     #[allow(unused)]
     stream: rodio::OutputStream,
     #[allow(unused)]
@@ -39,18 +67,18 @@ pub struct Radio {
 }
 
 impl Radio {
-    pub fn initialize() -> Result<Self> {
+    pub fn initialize(config: RadioConfig) -> Result<Self> {
         process::Command::new("yt-dlp")
             .stdout(process::Stdio::inherit())
             .arg("-x")
-            .args(["--audio-format", AUDIO_FORMAT])
+            .args(["--audio-format", &config.audio_format])
             .args(["-o", "%(extractor)s-%(id)s.%(ext)s"])
-            .args(["--paths", PLAYLIST_PATH])
+            .args(["--paths", config.playlist_path.to_str().unwrap()])
             .args([
                 "--download-archive",
-                &format!("{}/archive.txt", PLAYLIST_PATH),
+                &format!("{}/archive.txt", config.playlist_path.to_str().unwrap()),
             ])
-            .arg(PLAYLIST)
+            .arg(&config.playlist)
             .output()?;
 
         let (stream, stream_handle) = rodio::OutputStream::try_default()?;
@@ -68,6 +96,7 @@ impl Radio {
         // Needs to have set metadata for events to start being recieved.
         controls.set_metadata(Default::default())?;
         Ok(Self {
+            config,
             stream,
             stream_handle,
             sink,
@@ -87,7 +116,7 @@ impl Radio {
             RadioPlatformSong::from_filename(song_path.file_name().unwrap().to_str().unwrap())
                 .unwrap();
         self.played.push(platform_song.clone());
-        if self.played.len() > PLAYLIST_BLACKLIST_PREVIOUS_SONGS_LEN {
+        if self.played.len() > self.config.playlist_blacklist_previous_songs_len {
             // Sorry
             self.played.remove(0);
         }
@@ -97,13 +126,14 @@ impl Radio {
 
     fn load_random_next_song(&mut self) -> Result<()> {
         // All playlist songs
-        let mut song_paths = std::fs::read_dir(PLAYLIST_PATH)?
+        let mut song_paths = std::fs::read_dir(&self.config.playlist_path)?
             .filter_map(|entry| {
                 let Ok(entry) = entry else {
                     return None;
                 };
                 let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()) == Some(AUDIO_FORMAT_EXT) {
+                if path.extension().and_then(|e| e.to_str()) == Some(&self.config.audio_format_ext)
+                {
                     Some(path)
                 } else {
                     None
@@ -115,7 +145,7 @@ impl Radio {
         self.played[self
             .played
             .len()
-            .saturating_sub(PLAYLIST_BLACKLIST_PREVIOUS_SONGS_LEN)..]
+            .saturating_sub(self.config.playlist_blacklist_previous_songs_len)..]
             .iter()
             .for_each(|previous| {
                 song_paths.retain(|song_path| {
@@ -274,19 +304,22 @@ impl Command<RadioArgs> for Radio {
                         process::Command::new("yt-dlp")
                             .stdout(process::Stdio::inherit())
                             .arg("-x")
-                            .args(["--audio-format", AUDIO_FORMAT])
+                            .args(["--audio-format", &self.config.audio_format])
                             .args(["-o", "%(extractor)s-%(id)s.%(ext)s"])
-                            .args(["--paths", REQUESTED_PATH])
+                            .args(["--paths", self.config.requested_path.to_str().unwrap()])
                             .args([
                                 "--download-archive",
-                                &format!("{}/archive.txt", REQUESTED_PATH),
+                                &format!(
+                                    "{}/archive.txt",
+                                    self.config.requested_path.to_str().unwrap()
+                                ),
                             ]),
                     )
                     .output()?;
 
-                let mut song_path = PathBuf::from(REQUESTED_PATH);
+                let mut song_path = self.config.requested_path.clone();
                 song_path.push(platform_song.to_filename());
-                song_path.set_extension(AUDIO_FORMAT_EXT);
+                song_path.set_extension(&self.config.audio_format_ext);
                 self.load_next_song(&song_path)?;
             }
             RadioArgs::SkipCurrentSong => {
